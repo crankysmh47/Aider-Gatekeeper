@@ -1,0 +1,46 @@
+# Dependencies (cloned locally)
+Chetna/
+
+# Python
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing & dev artifacts
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Planning docs (internal)
+plan.md
+tasks.md
+
+# IDE
+.vscode/
+.idea/
+
+# Env files
+.env
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tokenizer cache (large)
+*.bin
+*.safetensors
+tokenizer_cache/
