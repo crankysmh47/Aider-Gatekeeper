@@ -93,7 +93,8 @@ def truncate_payload(
     Truncate conversation history to fit within token limit.
 
     The truncation strategy preserves:
-    1. The first message (system prompt) - always kept
+    1. All consecutive leading system messages (e.g. main system prompt +
+       any injected episodic-memory system messages) - always kept
     2. The last 4 messages (recent conversation) - always kept
     3. Removes middle messages if token limit exceeded
 
@@ -107,47 +108,56 @@ def truncate_payload(
     if not messages:
         return messages
 
-    # If 5 or fewer messages, no truncation needed
-    if len(messages) <= 5:
+    # Dynamically protect all consecutive leading system messages.
+    # This covers the main system prompt (index 0) as well as any
+    # injected system messages immediately following it (e.g. ChetnaAI
+    # episodic memory at index 1).
+    num_leading = 0
+    for msg in messages:
+        if msg.get("role") == "system":
+            num_leading += 1
+        else:
+            break
+
+    leading_messages = messages[:num_leading]
+    last_messages = messages[-4:]
+
+    # If the list is too short to have a meaningful middle, return as-is.
+    if len(messages) <= num_leading + 4:
         return messages
 
     tokenizer = get_tokenizer()
 
-    # Always keep first message (system) and last 4 messages
-    first_message = [messages[0]]
-    last_messages = messages[-4:]
-
-    # Calculate tokens for preserved messages
-    first_tokens = tokenizer.count_message_tokens(messages[0])
-    last_tokens = tokenizer.count_messages_tokens(messages[-4:])
-    total_preserved = first_tokens + last_tokens
+    # Calculate tokens for the preserved bookends.
+    leading_tokens = tokenizer.count_messages_tokens(leading_messages)
+    last_tokens = tokenizer.count_messages_tokens(last_messages)
+    total_preserved = leading_tokens + last_tokens
 
     # If preserved messages already exceed limit, return them anyway
-    # (can't drop system prompt or latest user query per requirements)
+    # (can't drop system prompts or latest user query per requirements).
     if total_preserved >= max_tokens:
-        return first_message + last_messages
+        return leading_messages + last_messages
 
-    # Calculate remaining budget for middle messages
+    # Calculate remaining budget for middle messages.
     remaining_budget = max_tokens - total_preserved
 
-    # Try to include as many middle messages as possible from the end
-    middle_messages = messages[1:-4]  # Exclude first and last 4
+    # Middle = everything between the protected leading block and last 4.
+    middle_messages = messages[num_leading:-4]
 
-    # Select middle messages from the end (more recent context)
+    # Select middle messages from the end (most recent context first).
     selected_middle: list[dict[str, Any]] = []
     current_tokens = 0
 
-    # Iterate from the end of middle messages (most recent)
     for msg in reversed(middle_messages):
         msg_tokens = tokenizer.count_message_tokens(msg)
         if current_tokens + msg_tokens <= remaining_budget:
-            selected_middle.insert(0, msg)  # Insert at beginning to maintain order
+            selected_middle.insert(0, msg)  # maintain chronological order
             current_tokens += msg_tokens
         else:
             break
 
-    # Return: system + selected middle + last 4
-    return first_message + selected_middle + last_messages
+    # Return: all leading system messages + selected middle + last 4.
+    return leading_messages + selected_middle + last_messages
 
 
 def get_token_stats(messages: list[dict[str, Any]]) -> dict[str, int]:

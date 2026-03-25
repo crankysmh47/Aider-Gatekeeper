@@ -1,4 +1,5 @@
 """FastAPI application for Aider-Gatekeeper proxy."""
+from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
 import httpx
@@ -9,10 +10,41 @@ from aider_gatekeeper.chetna_ai import process_chetna_ai_integration
 from aider_gatekeeper.token_truncation import truncate_payload
 from aider_gatekeeper.yaml_injection import inject_yaml_into_system_prompt
 
-app = FastAPI(title="Aider-Gatekeeper", version="0.1.0")
+# LLM engine URLs
+_OLLAMA_URL = "http://localhost:11434"
+_LLAMACPP_URL = "http://localhost:8080"
 
-# Target LLM server (llama.cpp)
-LLM_BASE_URL = "http://localhost:8080"
+# Resolved at startup by the lifespan handler; defaults to Ollama.
+LLM_BASE_URL: str = _OLLAMA_URL
+
+
+async def _resolve_llm_url() -> str:
+    """Ping Ollama; fall back to llama.cpp if unreachable.
+
+    Returns:
+        The base URL of whichever engine responded first.
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.head(_OLLAMA_URL, timeout=2.0)
+        print(f"[Gatekeeper] LLM engine: Ollama ({_OLLAMA_URL})")
+        return _OLLAMA_URL
+    except (httpx.ConnectError, httpx.TimeoutException):
+        print(
+            f"[Gatekeeper] Ollama not reachable — falling back to llama.cpp ({_LLAMACPP_URL})"
+        )
+        return _LLAMACPP_URL
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Resolve the active LLM engine once at startup."""
+    global LLM_BASE_URL
+    LLM_BASE_URL = await _resolve_llm_url()
+    yield
+
+
+app = FastAPI(title="Aider-Gatekeeper", version="0.1.0", lifespan=lifespan)
 
 
 @app.post("/v1/chat/completions")
@@ -25,7 +57,7 @@ async def chat_completions(request: Request) -> StreamingResponse:
     2. Phase 3: Inject YAML rules from project_context.yaml
     3. Phase 5: Query ChetnaAI and inject episodic memory
     4. Phase 4: Truncate payload if token limit exceeded
-    5. Forward to llama.cpp and stream response back
+    5. Forward to active LLM engine and stream response back
     """
     payload: dict[str, Any] = await request.json()
     messages: list[dict[str, Any]] = payload.get("messages", [])
@@ -47,12 +79,14 @@ async def chat_completions(request: Request) -> StreamingResponse:
     # Update payload with processed messages
     payload["messages"] = messages
 
-    # Forward to llama.cpp and stream response back
+    # Capture the resolved URL at request time (set during lifespan startup)
+    target_url = f"{LLM_BASE_URL}/v1/chat/completions"
+
     async def generate() -> AsyncGenerator[bytes, None]:
         async with httpx.AsyncClient() as client:
             async with client.stream(
                 "POST",
-                f"{LLM_BASE_URL}/v1/chat/completions",
+                target_url,
                 json=payload,
                 headers={"Content-Type": "application/json"},
                 timeout=None,

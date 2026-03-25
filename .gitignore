@@ -35,6 +35,7 @@ tasks.md
 # Env files
 .env
 *.env
+.gitignore
 
 # OS
 .DS_Store
@@ -44,3 +45,10 @@ Thumbs.db
 *.bin
 *.safetensors
 tokenizer_cache/
+
+# Ollama
+ollama/
+
+# Aider
+
+
