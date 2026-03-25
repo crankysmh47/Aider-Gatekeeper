@@ -40,7 +40,7 @@ foreach ($cmd in @("git", "docker", "curl", "aider")) {
         Write-Err "'$cmd' is not on PATH. Install it and re-run."
     }
 }
-Write-Ok "git / docker / curl - all found"
+Write-Ok "git / docker / curl / aider - all found"
 
 # =============================================================================
 # 2. First-launch setup
@@ -58,7 +58,7 @@ if (-not (Test-Path $VenvDir)) {
 }
 
 # --- Ensure aider-gatekeeper is installed ---
-$GatekeeperSource = "c:\sem4\Aider-Gateway"
+$GatekeeperSource = $ScriptDir
 $isInstalled = $false
 try {
     # Temporarily allow errors for this check to avoid NativeCommandError crash
@@ -74,10 +74,10 @@ try {
 if (-not $isInstalled) {
     if (Test-Path $GatekeeperSource) {
         Write-Warn "aider-gatekeeper not found in venv - installing from $GatekeeperSource ..."
-        & "$VenvDir\Scripts\pip.exe" install -e $GatekeeperSource
+        & "$VenvDir\Scripts\pip.exe" install -e "$GatekeeperSource"
         Write-Ok "aider-gatekeeper installed"
     } else {
-        Write-Err "aider-gatekeeper source not found at $GatekeeperSource. Please update start.ps1 with the correct path."
+        Write-Err "aider-gatekeeper source not found at $GatekeeperSource."
     }
 }
 
