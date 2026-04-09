@@ -7,15 +7,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 
 from aider_gatekeeper.chetna_ai import process_chetna_ai_integration
+from aider_gatekeeper.config import settings
 from aider_gatekeeper.token_truncation import truncate_payload
 from aider_gatekeeper.yaml_injection import inject_yaml_into_system_prompt
 
-# LLM engine URLs
-_OLLAMA_URL = "http://localhost:11434"
-_LLAMACPP_URL = "http://localhost:8080"
-
 # Resolved at startup by the lifespan handler; defaults to Ollama.
-LLM_BASE_URL: str = _OLLAMA_URL
+LLM_BASE_URL: str = settings.ollama_url
 
 
 async def _resolve_llm_url() -> str:
@@ -26,14 +23,14 @@ async def _resolve_llm_url() -> str:
     """
     try:
         async with httpx.AsyncClient() as client:
-            await client.head(_OLLAMA_URL, timeout=2.0)
-        print(f"[Gatekeeper] LLM engine: Ollama ({_OLLAMA_URL})")
-        return _OLLAMA_URL
+            await client.head(settings.ollama_url, timeout=2.0)
+        print(f"[Gatekeeper] LLM engine: Ollama ({settings.ollama_url})")
+        return settings.ollama_url
     except (httpx.ConnectError, httpx.TimeoutException):
         print(
-            f"[Gatekeeper] Ollama not reachable — falling back to llama.cpp ({_LLAMACPP_URL})"
+            f"[Gatekeeper] Ollama not reachable — falling back to llama.cpp ({settings.llamacpp_url})"
         )
-        return _LLAMACPP_URL
+        return settings.llamacpp_url
 
 
 @asynccontextmanager
@@ -44,7 +41,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
-app = FastAPI(title="Aider-Gatekeeper", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version=settings.version, lifespan=lifespan)
 
 
 @app.post("/v1/chat/completions")
@@ -73,7 +70,7 @@ async def chat_completions(request: Request) -> StreamingResponse:
     print(f"[Gatekeeper] Phase 5: ChetnaAI integration complete, {len(messages)} messages")
 
     # Phase 4: Token-Accurate Truncation
-    messages = truncate_payload(messages, max_tokens=9500)
+    messages = truncate_payload(messages, max_tokens=settings.max_tokens)
     print(f"[Gatekeeper] Phase 4: Token truncation complete, {len(messages)} messages")
 
     # Update payload with processed messages

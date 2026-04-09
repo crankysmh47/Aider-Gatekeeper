@@ -7,17 +7,13 @@ from typing import Any
 
 from transformers import AutoTokenizer
 
-# Default max tokens for Qwen 3.5 9B on 16GB VRAM
-DEFAULT_MAX_TOKENS = 9500
-
-# Model identifier for Qwen 3.5 9B
-default_model = "Qwen/Qwen2.5-7B"  # Using Qwen2.5 as Qwen3.5 may not be available yet
+from aider_gatekeeper.config import settings
 
 
 class TokenCounter:
     """Tokenizer wrapper for counting tokens in messages."""
 
-    def __init__(self, model_name: str = default_model) -> None:
+    def __init__(self, model_name: str = settings.default_model) -> None:
         """Initialize the tokenizer.
 
         Args:
@@ -87,7 +83,7 @@ def get_tokenizer() -> TokenCounter:
 
 def truncate_payload(
     messages: list[dict[str, Any]],
-    max_tokens: int = DEFAULT_MAX_TOKENS,
+    max_tokens: int = settings.max_tokens,
 ) -> list[dict[str, Any]]:
     """
     Truncate conversation history to fit within token limit.
