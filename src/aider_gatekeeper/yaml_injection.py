@@ -3,8 +3,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 
 def load_project_context_yaml(cwd: str | Path | None = None) -> str | None:
     """
