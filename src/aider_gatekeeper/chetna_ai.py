@@ -48,7 +48,7 @@ def _format_memory_summary(memories: list[dict[str, Any]]) -> str | None:
     """
     if not memories:
         return None
-    lines = []
+    lines: list[str] = []
     for m in memories:
         content = m.get("content", "").strip()
         if content:
